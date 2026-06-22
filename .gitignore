@@ -1,17 +1,19 @@
-# Dependencies
-node_modules/
-.pnpm-store/
 
-# Local production builds
-dist/
-
-# Terraform
 .terraform/
 *.tfstate
+*.tfstate.*
 *.tfstate.backup
-.terraform.lock.hcl
+tfplan
+tfplan.json
 
-# OS files
+
+*.zip
+dist/
+coverage/
+
+.env
+.env.*
+!.env.example
+
 .DS_Store
-Thumbs.db
 
