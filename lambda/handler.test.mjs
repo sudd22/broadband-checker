@@ -9,11 +9,17 @@ import {
 import { createHash } from 'node:crypto';
 
 // -----------------------------------------------------------------------------
-// Mock the DynamoDB SDK. The handler captures docClient.send at module load,
-// so we re-import handler.mjs in each test (via loadHandler) for a fresh
-// container. The docSend ref is reused but reset in beforeEach.
+// Shared mocks. The handler captures ssmClient.send + docClient.send at
+// module load, so we re-import handler.mjs in each test (via loadHandler)
+// for a fresh container. The refs are reused but reset in beforeEach.
 // -----------------------------------------------------------------------------
+const ssmSend = vi.fn();
 const docSend = vi.fn();
+
+vi.mock('@aws-sdk/client-ssm', () => ({
+  SSMClient: vi.fn(() => ({ send: ssmSend })),
+  GetParameterCommand: vi.fn((input) => ({ __cmd: 'GetParameter', input })),
+}));
 
 vi.mock('@aws-sdk/client-dynamodb', () => ({
   DynamoDBClient: vi.fn(() => ({ __ddb: true })),
@@ -27,6 +33,8 @@ vi.mock('@aws-sdk/lib-dynamodb', () => ({
 
 const SECRET = 'super-secret-origin-token';
 const TABLE = 'broadband-cache';
+const SSM_NAME = '/broadband/ofcom-key';
+const API_KEY = 'ofcom-live-key-123';
 const CLEAN_PC = 'SW1A1AA';
 const PC_HASH = createHash('sha256').update(CLEAN_PC).digest('hex').slice(0, 8);
 
@@ -40,22 +48,25 @@ function makeEvent({ path, headers, postcode } = {}) {
   return event;
 }
 
-/** Fresh import so module-level env-var capture (ORIGIN_SECRET) resets per test. */
+/** Fresh import so module-level env-var capture resets per test (cold start). */
 async function loadHandler() {
   vi.resetModules();
   return import('./src/handler.mjs');
 }
 
 beforeEach(() => {
+  ssmSend.mockReset();
   docSend.mockReset();
   process.env.ORIGIN_VERIFY_SECRET = SECRET;
   process.env.DYNAMODB_TABLE = TABLE;
+  process.env.SSM_PARAM_PATH = SSM_NAME;
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 // =============================================================================
@@ -112,22 +123,117 @@ describe('helpers', () => {
     expect(parsed.durationMs).toBe(7);
     expect(typeof parsed.ts).toBe('string');
   });
+});
 
-  it('fetchFromMock returns deterministic data for the same postcode', async () => {
-    const { fetchFromMock } = await loadHandler();
-    expect(fetchFromMock('SW1A1AA')).toEqual(fetchFromMock('sw1a1aa'));
-    expect(fetchFromMock('SW1A1AA').postcode).toBe('SW1A1AA');
-    expect(fetchFromMock('SW1A1AA').standard.maxDown).toBeGreaterThan(0);
+// =============================================================================
+// SSM — getApiKey
+// =============================================================================
+describe('getApiKey (SSM memoisation)', () => {
+  it('calls SSM once with WithDecryption=true and returns the value', async () => {
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    const { getApiKey } = await loadHandler();
+    const key = await getApiKey();
+    expect(key).toBe(API_KEY);
+    const { GetParameterCommand } = await import('@aws-sdk/client-ssm');
+    expect(GetParameterCommand).toHaveBeenCalledWith({
+      Name: SSM_NAME,
+      WithDecryption: true,
+    });
   });
 
-  it('fetchFromMock covers all three profiles across varied postcodes', async () => {
-    const { fetchFromMock } = await loadHandler();
-    const tiers = new Set();
-    for (const pc of ['SW1A1AA', 'EH11YZ', 'LL574TH', 'M11AE', 'B11AA', 'CR01AA']) {
-      tiers.add(fetchFromMock(pc).ultrafast.availability);
-    }
-    // Across 6 postcodes we should hit at least 2 distinct coverage profiles
-    expect(tiers.size).toBeGreaterThanOrEqual(2);
+  it('only calls SSM once across multiple warm invocations', async () => {
+    ssmSend.mockResolvedValue({ Parameter: { Value: API_KEY } });
+    const { getApiKey } = await loadHandler();
+    await getApiKey();
+    await getApiKey();
+    await getApiKey();
+    expect(ssmSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when SSM returns no parameter value', async () => {
+    ssmSend.mockResolvedValueOnce({});
+    const { getApiKey } = await loadHandler();
+    await expect(getApiKey()).rejects.toThrow(/not present/i);
+  });
+});
+
+// =============================================================================
+// Ofcom — fetchFromOfcom
+// =============================================================================
+describe('fetchFromOfcom', () => {
+  it('calls Ofcom with x-api-key auth + the cleaned postcode and parses JSON', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ standard: { maxDown: 100, maxUp: 10, availability: 99 } }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { fetchFromOfcom } = await loadHandler();
+    const result = await fetchFromOfcom(CLEAN_PC, API_KEY);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchSpy.mock.calls[0];
+    expect(url).toBe(`https://api.ofcom.org.uk/broadband-coverage?postcode=${CLEAN_PC}`);
+    expect(opts.headers['x-api-key']).toBe(API_KEY);
+    expect(opts.signal).toBeDefined();
+    expect(result.standard.maxDown).toBe(100);
+  });
+
+  it('throws with the HTTP status when Ofcom responds non-OK', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    const { fetchFromOfcom } = await loadHandler();
+    await expect(fetchFromOfcom(CLEAN_PC, API_KEY)).rejects.toThrow(/503/);
+  });
+});
+
+// =============================================================================
+// mapOfcom — adapter (exported indirectly via handler; tested by exercising
+// the cache-miss path with a mocked Ofcom response shape)
+// =============================================================================
+describe('mapOfcom (via handler cache-miss path)', () => {
+  it('buckets availability into full/partial/none across the three tiers', async () => {
+    // >95 → full, 5-95 → partial, <5 → none
+    const ofcomRaw = {
+      standard:  { maxDown: 17,  maxUp: 2,  availability: 99 }, // full
+      superfast: { maxDown: 80,  maxUp: 20, availability: 50 }, // partial
+      ultrafast: { maxDown: 330, maxUp: 50, availability: 2  }, // none
+    };
+    docSend.mockResolvedValueOnce({}); // DDB miss
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ofcomRaw,
+    }));
+    docSend.mockResolvedValueOnce({}); // Put
+
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    const body = JSON.parse(res.body);
+
+    expect(body.source).toBe('live');
+    expect(body.standard.availability).toBe('full');
+    expect(body.superfast.availability).toBe('partial');
+    expect(body.ultrafast.availability).toBe('none');
+    expect(body.standard.maxDown).toBe(17);
+    expect(body.superfast.maxUp).toBe(20);
+    expect(body.ultrafast.maxDown).toBe(330);
+  });
+
+  it('defaults missing tier fields to 0 / "none" availability', async () => {
+    docSend.mockResolvedValueOnce({}); // DDB miss
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({}), // Ofcom returns nothing
+    }));
+    docSend.mockResolvedValueOnce({}); // Put
+
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    const body = JSON.parse(res.body);
+
+    expect(body.standard.maxDown).toBe(0);
+    expect(body.standard.availability).toBe('none');
+    expect(body.superfast.maxDown).toBe(0);
+    expect(body.ultrafast.maxDown).toBe(0);
   });
 });
 
@@ -145,6 +251,7 @@ describe('Zero-Trust ingress verification', () => {
       error: 'FORBIDDEN',
       message: 'Direct access is not permitted',
     });
+    expect(ssmSend).not.toHaveBeenCalled();
     expect(docSend).not.toHaveBeenCalled();
   });
 
@@ -163,12 +270,15 @@ describe('Zero-Trust ingress verification', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('allows the request through when ORIGIN_VERIFY_SECRET is not configured (D8)', async () => {
+  it('allows the request through when ORIGIN_VERIFY_SECRET is not configured', async () => {
     delete process.env.ORIGIN_VERIFY_SECRET;
-    docSend.mockResolvedValue({}); // every DDB call succeeds
+    docSend.mockResolvedValue({});
+    ssmSend.mockResolvedValue({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({}),
+    }));
     const { handler } = await loadHandler();
     const res = await handler(makeEvent({ headers: {} }));
-    // No 403 — proceeds to mock fetch, returns source='live'.
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).source).toBe('live');
   });
@@ -185,7 +295,7 @@ describe('Zero-Trust ingress verification', () => {
 // Routing — /api/health, /api/check, 404
 // =============================================================================
 describe('routing', () => {
-  it('returns 200 ok for GET /api/health (D2)', async () => {
+  it('returns 200 ok for GET /api/health', async () => {
     const { handler } = await loadHandler();
     const res = await handler(makeEvent({ path: '/api/health' }));
     expect(res.statusCode).toBe(200);
@@ -213,7 +323,9 @@ describe('routing', () => {
   });
 
   it('also handles /check (without prefix)', async () => {
-    docSend.mockResolvedValue({}); // Get (miss) + Put both succeed
+    docSend.mockResolvedValue({});
+    ssmSend.mockResolvedValue({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
     const { handler } = await loadHandler();
     const res = await handler(makeEvent({ path: '/check' }));
     expect(res.statusCode).toBe(200);
@@ -256,7 +368,7 @@ describe('input validation', () => {
 // Cache-aside — DynamoDB reads & writes
 // =============================================================================
 describe('cache-aside (DynamoDB)', () => {
-  it('returns cached item with source=cache (D3)', async () => {
+  it('returns cached item with source=cache (no SSM / fetch)', async () => {
     const cached = {
       postcode: CLEAN_PC,
       standard: { maxDown: 100, maxUp: 10, availability: 'full' },
@@ -276,6 +388,7 @@ describe('cache-aside (DynamoDB)', () => {
     expect(body.source).toBe('cache');
     expect(body.responseTime).toBeGreaterThanOrEqual(0);
     expect(body.postcode).toBe(CLEAN_PC);
+    expect(ssmSend).not.toHaveBeenCalled();
   });
 
   it('treats an expired cached item as a MISS and refreshes it', async () => {
@@ -289,7 +402,10 @@ describe('cache-aside (DynamoDB)', () => {
       .mockResolvedValueOnce({
         Item: { postcode: CLEAN_PC, data: stale, ttl: Math.floor(Date.now() / 1000) - 10 },
       })
-      .mockResolvedValueOnce({}); // PutCommand write-back
+      .mockResolvedValueOnce({});
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
+
     const { handler } = await loadHandler();
     const res = await handler(makeEvent());
     expect(res.statusCode).toBe(200);
@@ -306,15 +422,25 @@ describe('cache-aside (DynamoDB)', () => {
 });
 
 // =============================================================================
-// Cache miss → mock fetch → write-back
+// Cache miss → SSM → Ofcom → write-back
 // =============================================================================
-describe('cache miss → mock fetch → write-back', () => {
-  it('returns mock data with source=live (D3, D5)', async () => {
+describe('cache miss → SSM → Ofcom → write-back', () => {
+  it('returns source=live with the mapped Ofcom response and writes 24h TTL', async () => {
+    const ofcomRaw = {
+      standard:  { maxDown: 80, maxUp: 20, availability: 99 },
+      superfast: { maxDown: 80, maxUp: 20, availability: 99 },
+      ultrafast: { maxDown: 0,  maxUp: 0,  availability: 2  },
+    };
     docSend
-      .mockResolvedValueOnce({})  // GetCommand: no item
-      .mockResolvedValueOnce({}); // PutCommand
-    const { handler } = await loadHandler();
+      .mockResolvedValueOnce({})               // GetCommand miss
+      .mockResolvedValueOnce({});              // PutCommand
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ofcomRaw,
+    }));
+
     const before = Math.floor(Date.now() / 1000);
+    const { handler } = await loadHandler();
     const res = await handler(makeEvent());
     const after = Math.floor(Date.now() / 1000);
 
@@ -322,26 +448,27 @@ describe('cache miss → mock fetch → write-back', () => {
     const body = JSON.parse(res.body);
     expect(body.source).toBe('live');
     expect(body.postcode).toBe(CLEAN_PC);
-    expect(body.standard).toBeDefined();
-    expect(body.superfast).toBeDefined();
-    expect(body.ultrafast).toBeDefined();
+    expect(body.standard.availability).toBe('full');
+    expect(body.ultrafast.availability).toBe('none');
     expect(body.responseTime).toBeGreaterThanOrEqual(0);
 
-    // Write-back uses the normalised postcode as the DDB key (D1).
-    // What is CACHED = the raw mock payload (no source/responseTime — those
+    // Write-back uses the normalised postcode as the DDB key.
+    // What is CACHED = the raw mapped payload (no source/responseTime — those
     // are added per response, not stored).
     const { PutCommand } = await import('@aws-sdk/lib-dynamodb');
-    const { fetchFromMock } = await loadHandler();
+    const { mapOfcom } = await loadHandler();
     const putArg = PutCommand.mock.calls.at(-1)[0];
     expect(putArg.TableName).toBe(TABLE);
     expect(putArg.Item.postcode).toBe(CLEAN_PC);
-    expect(putArg.Item.data).toEqual(fetchFromMock(CLEAN_PC));
+    expect(putArg.Item.data).toEqual(mapOfcom(CLEAN_PC, ofcomRaw));
     expect(putArg.Item.ttl).toBeGreaterThanOrEqual(before + 24 * 60 * 60);
     expect(putArg.Item.ttl).toBeLessThanOrEqual(after + 24 * 60 * 60);
   });
 
-  it('uses the normalised postcode (not pcHash) as the DynamoDB key (D1)', async () => {
+  it('uses the normalised postcode (not pcHash) as the DynamoDB key', async () => {
     docSend.mockResolvedValue({});
+    ssmSend.mockResolvedValue({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
     const { handler } = await loadHandler();
     await handler(makeEvent({ postcode: '  Sw1a1Aa ' }));
     const { GetCommand } = await import('@aws-sdk/lib-dynamodb');
@@ -350,10 +477,30 @@ describe('cache miss → mock fetch → write-back', () => {
     expect(getArg.Key.postcode).not.toBe(PC_HASH);
   });
 
+  it('returns 502 when Ofcom responds with 5xx', async () => {
+    docSend.mockResolvedValueOnce({}); // DDB miss
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    expect(res.statusCode).toBe(502);
+    expect(res.headers['Cache-Control']).toBe('no-store');
+  });
+
+  it('returns 502 when the SSM parameter has no value', async () => {
+    docSend.mockResolvedValueOnce({}); // DDB miss
+    ssmSend.mockResolvedValueOnce({}); // no Parameter returned at all
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    expect(res.statusCode).toBe(502);
+  });
+
   it('logs the PutItem failure but still returns 200 with the live data', async () => {
     docSend
-      .mockResolvedValueOnce({})             // GetCommand miss
+      .mockResolvedValueOnce({})              // GetCommand miss
       .mockRejectedValueOnce(new Error('put down')); // PutCommand fails
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
     const { handler } = await loadHandler();
     const res = await handler(makeEvent());
     expect(res.statusCode).toBe(200);
@@ -382,7 +529,7 @@ describe('PII protection (GDPR)', () => {
     expect(logged).not.toContain('SW1A 1AA');
   });
 
-  it('different case/whitespace variants normalise to the same cache key (D1)', async () => {
+  it('different case/whitespace variants normalise to the same cache key', async () => {
     docSend.mockResolvedValue({
       Item: { postcode: CLEAN_PC, data: { ok: true }, ttl: Math.floor(Date.now() / 1000) + 9999 },
     });
@@ -405,18 +552,31 @@ describe('fallback branches', () => {
     });
     const { handler } = await loadHandler();
     const res = await handler(makeEvent());
-    // Handler still works — it uses the hardcoded default 'broadband-cache'.
     expect(res.statusCode).toBe(200);
+  });
+
+  it('falls back to default SSM param path when SSM_PARAM_PATH env var is unset', async () => {
+    delete process.env.SSM_PARAM_PATH;
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    const { getApiKey } = await loadHandler();
+    const key = await getApiKey();
+    expect(key).toBe(API_KEY);
+    const { GetParameterCommand } = await import('@aws-sdk/client-ssm');
+    // Default path '/broadband/ofcom-key' should be used
+    expect(GetParameterCommand).toHaveBeenCalledWith({
+      Name: '/broadband/ofcom-key',
+      WithDecryption: true,
+    });
   });
 
   it('falls back to empty path when requestContext.http is missing', async () => {
     const { handler } = await loadHandler();
     const res = await handler({
-      // No requestContext.http — exercises the `?? ''` fallback on line 116.
-      // With path = '' the handler reaches the 404 branch.
+      // No requestContext.http — exercises the `?? ''` fallback
       headers: { 'x-origin-verify': SECRET },
       queryStringParameters: { pc: 'SW1A1AA' },
     });
+    // With path = '' the handler reaches the 404 branch
     expect(res.statusCode).toBe(404);
   });
 });
