@@ -99,9 +99,9 @@ export async function getApiKey() {
 // Real call to the Ofcom Broadband Coverage API. Throws on non-OK;
 // the handler catches and returns 502 UPSTREAM_ERROR.
 export async function fetchFromOfcom(cleanPc, apiKey) {
-  const url = `https://api.ofcom.org.uk/broadband-coverage?postcode=${encodeURIComponent(cleanPc)}`;
+  const url = `https://api-proxy.ofcom.org.uk/broadband/coverage/${encodeURIComponent(cleanPc)}`;
   const response = await fetch(url, {
-    headers: { 'x-api-key': apiKey },
+    headers: { 'Ocp-Apim-Subscription-Key': apiKey },
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
@@ -110,11 +110,48 @@ export async function fetchFromOfcom(cleanPc, apiKey) {
   return response.json();
 }
 
-
 // --- Ofcom → app shape adapter -----------------------------------------------
 // Ofcom returns each tier with numeric availability (0-100 %). We bucket it
 // into the three labels the UI expects.
 export function mapOfcom(pc, raw) {
+  if (raw && Array.isArray(raw.Availability)) {
+    const list = raw.Availability;
+    const total = list.length;
+
+    const getStats = (downKey, upKey) => {
+      if (total === 0) return { maxDown: 0, maxUp: 0, availability: 'none' };
+
+      let maxDown = 0;
+      let maxUp = 0;
+      let availableCount = 0;
+
+      for (const item of list) {
+        const down = item[downKey] ?? -1;
+        const up = item[upKey] ?? -1;
+        if (down > 0) {
+          availableCount++;
+          if (down > maxDown) maxDown = down;
+        }
+        if (up > 0) {
+          if (up > maxUp) maxUp = up;
+        }
+      }
+
+      const pct = (availableCount / total) * 100;
+      const availability = pct > 95 ? 'full' : pct > 5 ? 'partial' : 'none';
+
+      return { maxDown, maxUp, availability };
+    };
+
+    return {
+      postcode: pc,
+      standard: getStats('MaxBbPredictedDown', 'MaxBbPredictedUp'),
+      superfast: getStats('MaxSfbbPredictedDown', 'MaxSfbbPredictedUp'),
+      ultrafast: getStats('MaxUfbbPredictedDown', 'MaxUfbbPredictedUp'),
+    };
+  }
+
+  // Fallback for flat mocked shape in unit tests
   const tier = (d) => ({
     maxDown:      d?.maxDown      ?? 0,
     maxUp:        d?.maxUp        ?? 0,
@@ -123,9 +160,9 @@ export function mapOfcom(pc, raw) {
   const avail = (pct) => pct > 95 ? 'full' : pct > 5 ? 'partial' : 'none';
   return {
     postcode:  pc,
-    standard:  tier(raw.standard),
-    superfast: tier(raw.superfast),
-    ultrafast: tier(raw.ultrafast),
+    standard:  tier(raw?.standard),
+    superfast: tier(raw?.superfast),
+    ultrafast: tier(raw?.ultrafast),
   };
 }
 

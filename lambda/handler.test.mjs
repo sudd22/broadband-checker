@@ -161,7 +161,7 @@ describe('getApiKey (SSM memoisation)', () => {
 // Ofcom — fetchFromOfcom
 // =============================================================================
 describe('fetchFromOfcom', () => {
-  it('calls Ofcom with x-api-key auth + the cleaned postcode and parses JSON', async () => {
+  it('calls Ofcom with Ocp-Apim-Subscription-Key auth + the cleaned postcode and parses JSON', async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ standard: { maxDown: 100, maxUp: 10, availability: 99 } }),
@@ -173,8 +173,8 @@ describe('fetchFromOfcom', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, opts] = fetchSpy.mock.calls[0];
-    expect(url).toBe(`https://api.ofcom.org.uk/broadband-coverage?postcode=${CLEAN_PC}`);
-    expect(opts.headers['x-api-key']).toBe(API_KEY);
+    expect(url).toBe(`https://api-proxy.ofcom.org.uk/broadband/coverage/${CLEAN_PC}`);
+    expect(opts.headers['Ocp-Apim-Subscription-Key']).toBe(API_KEY);
     expect(opts.signal).toBeDefined();
     expect(result.standard.maxDown).toBe(100);
   });
@@ -230,6 +230,75 @@ describe('mapOfcom (via handler cache-miss path)', () => {
     const res = await handler(makeEvent());
     const body = JSON.parse(res.body);
 
+    expect(body.standard.maxDown).toBe(0);
+    expect(body.standard.availability).toBe('none');
+    expect(body.superfast.maxDown).toBe(0);
+    expect(body.ultrafast.maxDown).toBe(0);
+  });
+
+  it('correctly aggregates real Ofcom Address Availability arrays', async () => {
+    const ofcomRaw = {
+      PostCode: 'SW1A1AA',
+      Availability: [
+        {
+          MaxBbPredictedDown: 16,
+          MaxBbPredictedUp: 1,
+          MaxSfbbPredictedDown: -1,
+          MaxSfbbPredictedUp: -1,
+          // MaxUfbbPredictedDown & MaxUfbbPredictedUp omitted to test nullish coalescing default value
+        },
+        {
+          MaxBbPredictedDown: 17,
+          MaxBbPredictedUp: 2,
+          MaxSfbbPredictedDown: 76,
+          MaxSfbbPredictedUp: 19,
+          MaxUfbbPredictedDown: -1,
+          MaxUfbbPredictedUp: -1
+        }
+      ],
+      Count: 2
+    };
+    docSend.mockResolvedValueOnce({}); // DDB miss
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ofcomRaw,
+    }));
+    docSend.mockResolvedValueOnce({}); // Put
+
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    const body = JSON.parse(res.body);
+
+    expect(body.source).toBe('live');
+    expect(body.standard.maxDown).toBe(17);
+    expect(body.standard.maxUp).toBe(2);
+    expect(body.standard.availability).toBe('full'); // 2/2 = 100%
+    expect(body.superfast.maxDown).toBe(76);
+    expect(body.superfast.maxUp).toBe(19);
+    expect(body.superfast.availability).toBe('partial'); // 1/2 = 50%
+    expect(body.ultrafast.maxDown).toBe(0);
+    expect(body.ultrafast.maxUp).toBe(0);
+    expect(body.ultrafast.availability).toBe('none'); // 0/2 = 0%
+  });
+
+  it('correctly handles empty Ofcom Address Availability arrays', async () => {
+    const ofcomRaw = {
+      PostCode: 'SW1A1AA',
+      Availability: [],
+      Count: 0
+    };
+    docSend.mockResolvedValueOnce({}); // DDB miss
+    ssmSend.mockResolvedValueOnce({ Parameter: { Value: API_KEY } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ofcomRaw,
+    }));
+    docSend.mockResolvedValueOnce({}); // Put
+
+    const { handler } = await loadHandler();
+    const res = await handler(makeEvent());
+    const body = JSON.parse(res.body);
+
+    expect(body.source).toBe('live');
     expect(body.standard.maxDown).toBe(0);
     expect(body.standard.availability).toBe('none');
     expect(body.superfast.maxDown).toBe(0);

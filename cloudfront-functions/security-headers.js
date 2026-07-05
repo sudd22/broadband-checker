@@ -7,18 +7,20 @@ function handler(event) {
   };
 
    headers['content-security-policy'] = {
-    value: [
-      "default-src 'none'",
-      "script-src 'self'",
-      "style-src 'self' 'unsafe-inline'",          
-      "img-src 'self' data:",
-      "font-src 'self'",
-      "connect-src 'self' https://api.postcodes.io",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'"
-    ].join('; ')
-  };
+     value: [
+       "default-src 'none'",
+       "script-src 'self'",
+       "style-src 'self' 'unsafe-inline'",          
+       "img-src 'self' data: https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com",
+       "font-src 'self'",
+       "connect-src 'self' https://api.postcodes.io https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com",
+       "worker-src 'self' blob:",
+       "child-src 'self' blob:",
+       "frame-ancestors 'none'",
+       "base-uri 'self'",
+       "form-action 'self'"
+     ].join('; ')
+   };
 
   headers['x-content-type-options']  = { value: 'nosniff' };
   headers['x-frame-options']         = { value: 'DENY' };

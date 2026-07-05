@@ -56,13 +56,13 @@ resource "aws_cloudfront_origin_request_policy" "api" {
 
 
 resource "aws_cloudfront_distribution" "cdn" {
-  enabled         = true
-  is_ipv6_enabled = true
-  http_version    = "http2and3"
-  price_class     = "PriceClass_100"
-  web_acl_id      = aws_wafv2_web_acl.main.arn
-  aliases         = [var.domain_name]
-
+  enabled             = true
+  is_ipv6_enabled     = true
+  http_version        = "http2and3"
+  price_class         = "PriceClass_100"
+  web_acl_id          = aws_wafv2_web_acl.main.arn
+  aliases             = [var.domain_name]
+  default_root_object = "index.html"
 
   origin {
     origin_id                = "S3Origin"

@@ -88,7 +88,7 @@ async function lookupLive(rawPostcode: string): Promise<BroadbandResult> {
   const pc = normalizePostcode(rawPostcode);
 
   try {
-    const { data } = await axios.get<BroadbandResult>(
+    const { data } = await axios.get<any>(
       `${API_URL}/check`,
       {
         params: { pc },
@@ -98,10 +98,47 @@ async function lookupLive(rawPostcode: string): Promise<BroadbandResult> {
           : undefined,
       },
     );
+
+    const standard = data.standard || { maxDown: 0, maxUp: 0, availability: 'none' };
+    const superfast = data.superfast || { maxDown: 0, maxUp: 0, availability: 'none' };
+    const ultrafast = data.ultrafast || { maxDown: 0, maxUp: 0, availability: 'none' };
+
+    const maxDownloadMbps = Math.max(standard.maxDown || 0, superfast.maxDown || 0, ultrafast.maxDown || 0);
+    const maxUploadMbps = Math.max(standard.maxUp || 0, superfast.maxUp || 0, ultrafast.maxUp || 0);
+
+    let technology: BroadbandTechnology = 'None';
+    let technologyLabel = 'No coverage';
+    let availabilityPercent = 0;
+
+    const mapAvailPercent = (avail: string) => {
+      if (avail === 'full') return 100;
+      if (avail === 'partial') return 50;
+      return 0;
+    };
+
+    if (ultrafast.maxDown > 0 && ultrafast.availability !== 'none') {
+      technology = 'FTTP';
+      technologyLabel = 'Fibre to the Premises';
+      availabilityPercent = mapAvailPercent(ultrafast.availability);
+    } else if (superfast.maxDown > 0 && superfast.availability !== 'none') {
+      technology = 'FTTC';
+      technologyLabel = 'Fibre to the Cabinet';
+      availabilityPercent = mapAvailPercent(superfast.availability);
+    } else if (standard.maxDown > 0 && standard.availability !== 'none') {
+      technology = 'ADSL';
+      technologyLabel = 'Copper ADSL';
+      availabilityPercent = mapAvailPercent(standard.availability);
+    }
+
     return {
-      ...data,
-      technology: normalizeTechnology(data.technology),
       postcode: data.postcode || formatPostcode(rawPostcode),
+      maxDownloadMbps,
+      maxUploadMbps,
+      technology,
+      technologyLabel,
+      availabilityPercent,
+      place: data.place,
+      scenario: data.scenario,
     };
   } catch (err) {
     if (axios.isAxiosError(err)) {
