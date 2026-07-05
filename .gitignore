@@ -5,7 +5,10 @@
 *.tfstate.backup
 tfplan
 tfplan.json
-
+*.tfvars
+*.tfvars.json
+!.tfvars.example
+.terraform.tfstate.lock.info
 
 *.zip
 dist/
