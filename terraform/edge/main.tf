@@ -32,7 +32,7 @@ variable "api_gateway_endpoint" {
   description = "API Gateway execute-api endpoint — used as the CloudFront API origin"
 }
 
-# ── Outputs (read by root outputs.tf and observability module) ─────────────
+
 output "cloudfront_distribution_domain" {
   value       = aws_cloudfront_distribution.cdn.domain_name
   description = "CloudFront distribution domain"

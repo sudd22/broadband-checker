@@ -1,4 +1,4 @@
-/** Render an Mbps value as a human string, promoting to Gbps at >= 1000. */
+
 export function formatSpeed(mbps: number): { value: string; unit: string } {
   if (mbps >= 1000) {
     const gbps = mbps / 1000;
@@ -8,7 +8,7 @@ export function formatSpeed(mbps: number): { value: string; unit: string } {
   return { value: String(mbps), unit: 'Mbps' };
 }
 
-/** Categorise a download speed using Ofcom's broadband bands. */
+
 export function speedCategory(mbps: number): {
   label: string;
   tone: 'none' | 'standard' | 'superfast' | 'ultrafast';

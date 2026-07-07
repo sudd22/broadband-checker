@@ -1,6 +1,6 @@
 export type BroadbandTechnology = 'FTTP' | 'FTTC' | 'ADSL' | 'None';
 
-/** Normalised broadband availability record returned to the UI. */
+
 export interface BroadbandResult {
   postcode: string;
   place?: string;
@@ -12,7 +12,7 @@ export interface BroadbandResult {
   availabilityPercent: number;
 }
 
-/** Shape of a single entry in the demo-mode fixture file. */
+
 export interface DemoEntry extends Partial<BroadbandResult> {
   error?: {
     status: number;
@@ -20,7 +20,7 @@ export interface DemoEntry extends Partial<BroadbandResult> {
   };
 }
 
-/** A typed error carrying an HTTP-ish status so the UI can react appropriately. */
+
 export class LookupError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -30,7 +30,7 @@ export class LookupError extends Error {
   }
 }
 
-/** Minimal subset of the postcodes.io postcode lookup payload we rely on. */
+
 export interface PostcodesIoLookup {
   status: number;
   result: {

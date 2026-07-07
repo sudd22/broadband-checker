@@ -5,7 +5,7 @@ export function Header() {
     <header className="sticky top-0 z-30 border-b hairline bg-paper/70 backdrop-blur-md">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-8">
         <div className="flex items-center gap-3">
-          {/* Animated signal bars — the connectivity motif, alive on load. */}
+          {}
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-ink text-paper shadow-lift">
             <span className="flex h-4 items-end gap-[3px]">
               {[0, 1, 2, 3].map((i) => (

@@ -9,9 +9,9 @@ import { isStructurallyValidPostcode, normalizePostcode } from '../lib/postcode'
 import { SearchIcon, SpinnerIcon } from './icons';
 
 interface SearchBarProps {
-  /** Called with the full postcodes.io-validated record (including coordinates). */
+  
   onValidated: (validated: ValidatedPostcode) => void;
-  /** True while a downstream broadband lookup is running. */
+  
   busy: boolean;
 }
 
@@ -28,7 +28,7 @@ export function SearchBar({ onValidated, busy }: SearchBarProps) {
 
   const structurallyValid = isStructurallyValidPostcode(query);
 
-  // Debounced autocomplete against postcodes.io while the user types.
+  
   useEffect(() => {
     const q = normalizePostcode(query);
     if (q.length < 2) {
@@ -56,7 +56,7 @@ export function SearchBar({ onValidated, busy }: SearchBarProps) {
     };
   }, [query]);
 
-  // Close the dropdown when clicking outside.
+  
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {

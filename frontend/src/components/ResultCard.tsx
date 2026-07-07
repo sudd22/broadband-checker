@@ -65,7 +65,7 @@ export function ResultCard({ result }: { result: BroadbandResult }) {
 
   return (
     <section className="animate-fade-up space-y-5">
-      {/* Header row: postcode as the headline, place + category alongside. */}
+      {}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-mute">
@@ -98,7 +98,7 @@ export function ResultCard({ result }: { result: BroadbandResult }) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-3xl border hairline bg-paper-card shadow-lift">
-          {/* Hairline-divided instrument grid — no floating boxes. */}
+          {}
           <div className="grid grid-cols-2 divide-x divide-y divide-line lg:grid-cols-4 lg:divide-y-0">
             <StatTile
               icon={<DownloadIcon className="h-4 w-4" />}
@@ -129,7 +129,7 @@ export function ResultCard({ result }: { result: BroadbandResult }) {
             />
           </div>
 
-          {/* Coverage meter, divided from the grid by a hairline. */}
+          {}
           <div className="border-t hairline bg-paper/50 p-6">
             <div className="mb-2.5 flex items-center justify-between text-sm">
               <span className="font-medium text-ink-soft">

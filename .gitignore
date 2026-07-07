@@ -15,7 +15,6 @@ coverage/
 .env.*
 !.env.example
 
-# Terraform local variable files (contain secrets like API keys)
 *.tfvars
 *.tfvars.json
 !.tfvars.example

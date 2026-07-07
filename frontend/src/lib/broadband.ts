@@ -10,10 +10,8 @@ import type {
 const API_URL = import.meta.env.VITE_API_URL;
 const ORIGIN_VERIFY_SECRET = import.meta.env.VITE_ORIGIN_VERIFY_SECRET;
 
-/** True when the app is configured to run entirely client-side from fixtures. */
 export const isDemoMode = API_URL === '/demo';
 
-/** Cache the demo fixtures so we only fetch the static JSON once per session. */
 let demoDbPromise: Promise<Record<string, DemoEntry>> | null = null;
 
 function loadDemoDb(): Promise<Record<string, DemoEntry>> {
@@ -26,7 +24,6 @@ function loadDemoDb(): Promise<Record<string, DemoEntry>> {
         return res.json() as Promise<Record<string, DemoEntry>>;
       })
       .catch((err) => {
-        // Reset so a later retry can attempt the fetch again.
         demoDbPromise = null;
         throw err instanceof LookupError
           ? err
@@ -62,12 +59,10 @@ function coerceResult(entry: DemoEntry, fallbackPostcode: string): BroadbandResu
   };
 }
 
-/** DEMO-MODE lookup: read from the local fixture map by normalised key. */
 async function lookupDemo(rawPostcode: string): Promise<BroadbandResult> {
   const key = normalizePostcode(rawPostcode);
   const db = await loadDemoDb();
 
-  // Simulate realistic latency so loading states are visible in the demo.
   await new Promise((r) => setTimeout(r, 450));
 
   const entry = db[key] ?? db.default;
@@ -75,7 +70,6 @@ async function lookupDemo(rawPostcode: string): Promise<BroadbandResult> {
     throw new LookupError('No data available for this postcode.', 404);
   }
 
-  // A fixture entry may be flagged to simulate an upstream gateway failure.
   if (entry.error) {
     throw new LookupError(entry.error.message, entry.error.status);
   }
@@ -83,7 +77,6 @@ async function lookupDemo(rawPostcode: string): Promise<BroadbandResult> {
   return coerceResult(entry, formatPostcode(rawPostcode));
 }
 
-/** LIVE-MODE lookup: call the authenticated backend lookup endpoint. */
 async function lookupLive(rawPostcode: string): Promise<BroadbandResult> {
   const pc = normalizePostcode(rawPostcode);
 
@@ -163,7 +156,6 @@ async function lookupLive(rawPostcode: string): Promise<BroadbandResult> {
   }
 }
 
-/** Public entry point used by the UI. Routes to demo or live based on env. */
 export function fetchBroadband(rawPostcode: string): Promise<BroadbandResult> {
   return isDemoMode ? lookupDemo(rawPostcode) : lookupLive(rawPostcode);
 }

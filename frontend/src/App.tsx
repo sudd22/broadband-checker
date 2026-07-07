@@ -66,7 +66,7 @@ export default function App() {
         await handleValidated(validated);
       }
     } catch {
-      // Fall back to a coordinate-less lookup so the user still sees results.
+      
       setStatus('loading');
       setResult(null);
       setErrorMessage('');
@@ -90,20 +90,20 @@ export default function App() {
       <Header />
 
       <main className="flex-1">
-        {/* Hero — full-width live UK map with an overlaid search instrument. */}
+        {}
         <section className="relative">
           <div className="relative h-[460px] w-full overflow-hidden border-b hairline sm:h-[560px]">
             <Suspense fallback={<MapSkeleton />}>
               <PostcodeMap target={mapTarget} />
             </Suspense>
 
-            {/* Bottom scrim improves legibility of the floating search card. */}
+            {}
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-paper/95 via-paper/40 to-transparent"
             />
 
-            {/* Editorial kicker pinned to the top-left of the hero. */}
+            {}
             <div className="pointer-events-none absolute left-5 top-5 z-10 sm:left-8 sm:top-8">
               <span className="inline-flex items-center gap-2 rounded-full border hairline bg-paper-card/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-mute shadow-sm backdrop-blur-md">
                 <span className="h-1.5 w-1.5 animate-float rounded-full bg-flare" />
@@ -111,7 +111,7 @@ export default function App() {
               </span>
             </div>
 
-            {/* Floating search card. */}
+            {}
             <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-8 sm:px-8 sm:pb-10">
               <div className="mx-auto w-full max-w-3xl">
                 <div className="animate-fade-up rounded-3xl border hairline bg-paper-card/95 p-4 shadow-ring backdrop-blur-md sm:p-6">
@@ -161,7 +161,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* Results stack — kept narrow for readability under the wide hero. */}
+        {}
         <section className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8 sm:py-16">
           {status === 'idle' && <EmptyState />}
           {status === 'loading' && <LoadingCard />}

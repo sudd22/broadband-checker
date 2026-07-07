@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 @layer base {
-  /* shadcn-compatible semantic tokens, derived from our paper/ink/flare palette. */
+  
   :root {
     --background: 48 50% 97%;
     --foreground: 248 13% 10%;
@@ -32,7 +32,7 @@
 
   body {
     @apply bg-paper text-ink font-sans antialiased;
-    /* Faint engineered dot-grid + two soft light pools, layered on paper. */
+    
     background-image:
       radial-gradient(circle at 18% -10%, rgba(224, 33, 138, 0.06), transparent 45%),
       radial-gradient(circle at 100% 0%, rgba(22, 21, 27, 0.05), transparent 38%),
@@ -54,14 +54,14 @@
 }
 
 @layer components {
-  /* Tabular, instrument-like numerals for speeds and stats. */
+  
   .nums {
     font-family: '"Space Grotesk"', 'Space Grotesk', sans-serif;
     font-feature-settings: 'tnum' 1, 'lnum' 1;
     letter-spacing: -0.02em;
   }
 
-  /* Reusable hairline border that matches the paper aesthetic. */
+  
   .hairline {
     border-color: rgba(22, 21, 27, 0.1);
   }

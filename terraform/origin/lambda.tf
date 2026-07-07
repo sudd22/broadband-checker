@@ -21,9 +21,9 @@ resource "aws_lambda_function" "broadband_checker" {
   timeout          = 10
 
 
-  # -1 = "no reserved limit, use account default" (your account has a low
-  # total Lambda concurrency, so any positive value would violate the
-  # account's minimum-unreserved floor of 10. WAF rate limit still caps abuse.)
+
+
+
   reserved_concurrent_executions = -1
 
   environment {
