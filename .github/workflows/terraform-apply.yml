@@ -46,6 +46,8 @@ jobs:
                   fi
                   terraform -chdir=terraform apply \
                     -var="ofcom_api_key=${{ secrets.OFCOM_API_KEY }}" \
+                    -var="domain_name=${{ secrets.CLOUDFRONT_DOMAIN }}" \
+                    -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
                     -auto-approve $TARGET_FLAG
 
             - name: Get CloudFront URL
