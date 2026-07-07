@@ -1,20 +1,3 @@
-// =============================================================================
-// UK Broadband Checker — AWS Lambda handler (Node.js 20+, ES Modules)
-//
-// Aligned to plan (Static_app_api_doc.md §3):
-//
-//   - DynamoDB partition key = normalised postcode
-//   - GET /api/health returns { status: 'ok', ts: <ISO> }
-//   - Response body includes source ('cache'|'live') + responseTime (ms)
-//   - Cache-Control: max-age=300 on success, no-store on errors
-//   - Ofcom API key fetched from SSM Parameter Store (SecureString)
-//     and memoised across warm invocations
-//   - X-Origin-Verify check skipped when ORIGIN_VERIFY_SECRET is unset
-//
-// Security posture: Zero-Trust ingress + UK GDPR-safe logging.
-// Postcode is PII — only the first 8 chars of its SHA-256 hash are ever logged.
-// =============================================================================
-
 import { createHash } from 'node:crypto';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -24,38 +7,26 @@ import {
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
 
-// --- Long-lived clients (one per container, reused across warm invocations) --
 const ddbClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(ddbClient);
 const ssmClient = new SSMClient({});
 
-// --- Memoised secret (persists across warm invocations, reset on cold start) --
 let cachedApiKey;
 
-// --- Constants captured once per container ------------------------------------
 const TABLE = process.env.DYNAMODB_TABLE ?? 'broadband-cache';
 const PARAM = process.env.SSM_PARAM_PATH ?? '/broadband/ofcom-key';
-const CACHE_TTL_SECONDS = 24 * 60 * 60; // 24 hours
-
-// Optional — only enforced when set. Unset = skip (unit tests, local dev).
+const CACHE_TTL_SECONDS = 24 * 60 * 60;
 const ORIGIN_SECRET = process.env.ORIGIN_VERIFY_SECRET;
-
-// Full UK postcode regex (post-normalisation: no spaces, uppercase)
 const POSTCODE_RE = /^[A-Z]{1,2}[0-9][0-9A-Z]?[0-9][A-BD-HJLNP-UW-Z]{2}$/;
 
-// --- Helpers (exported so unit tests can exercise them in isolation) ---------
-
-/** Strip whitespace + uppercase + trim. Idempotent. "sw1a 1aa" -> "SW1A1AA" */
 export function normalise(raw) {
   return (raw ?? '').replace(/\s+/g, '').toUpperCase().trim();
 }
 
-/** First 8 chars of SHA-256 of the cleaned postcode. Safe to log. */
 export function hashPostcode(clean) {
   return createHash('sha256').update(clean).digest('hex').slice(0, 8);
 }
 
-/** Case-insensitive header lookup. API Gateway lower-cases header keys. */
 export function getHeader(headers, name) {
   if (!headers) return undefined;
   const target = name.toLowerCase();
@@ -65,7 +36,6 @@ export function getHeader(headers, name) {
   return undefined;
 }
 
-/** Build an API Gateway proxy response with Cache-Control defaults per plan. */
 export function respond(statusCode, body, cacheControl = 'max-age=300') {
   return {
     statusCode,
@@ -74,14 +44,10 @@ export function respond(statusCode, body, cacheControl = 'max-age=300') {
   };
 }
 
-/** Structured JSON log line. Never logs the postcode. */
 export function log(level, data) {
   console.log(JSON.stringify({ level, ts: new Date().toISOString(), ...data }));
 }
 
-// --- SSM (memoised) ----------------------------------------------------------
-// Fetch the Ofcom API key once per cold container. Warm invocations reuse the
-// in-memory value — no SSM round-trip per cache miss.
 export async function getApiKey() {
   if (cachedApiKey) return cachedApiKey;
   const { Parameter } = await ssmClient.send(new GetParameterCommand({
@@ -95,9 +61,6 @@ export async function getApiKey() {
   return cachedApiKey;
 }
 
-// --- Ofcom fetch -------------------------------------------------------------
-// Real call to the Ofcom Broadband Coverage API. Throws on non-OK;
-// the handler catches and returns 502 UPSTREAM_ERROR.
 export async function fetchFromOfcom(cleanPc, apiKey) {
   const url = `https://api-proxy.ofcom.org.uk/broadband/coverage/${encodeURIComponent(cleanPc)}`;
   const response = await fetch(url, {
@@ -110,9 +73,6 @@ export async function fetchFromOfcom(cleanPc, apiKey) {
   return response.json();
 }
 
-// --- Ofcom → app shape adapter -----------------------------------------------
-// Ofcom returns each tier with numeric availability (0-100 %). We bucket it
-// into the three labels the UI expects.
 export function mapOfcom(pc, raw) {
   if (raw && Array.isArray(raw.Availability)) {
     const list = raw.Availability;
@@ -151,7 +111,6 @@ export function mapOfcom(pc, raw) {
     };
   }
 
-  // Fallback for flat mocked shape in unit tests
   const tier = (d) => ({
     maxDown:      d?.maxDown      ?? 0,
     maxUp:        d?.maxUp        ?? 0,
@@ -166,11 +125,9 @@ export function mapOfcom(pc, raw) {
   };
 }
 
-// --- Handler -----------------------------------------------------------------
 export const handler = async (event) => {
   const path = event.requestContext?.http?.path ?? '';
 
-  // 1. ZERO-TRUST INGRESS VERIFICATION (skipped when secret unset)
   if (ORIGIN_SECRET) {
     const provided = getHeader(event.headers, 'X-Origin-Verify');
     if (!provided || provided !== ORIGIN_SECRET) {
@@ -181,17 +138,14 @@ export const handler = async (event) => {
     }
   }
 
-  // 2. HEALTH ENDPOINT — short-circuits before postcode logic
   if (path === '/api/health' || path === '/health') {
     return respond(200, { status: 'ok', ts: new Date().toISOString() }, 'no-store');
   }
 
-  // 3. ROUTE CHECK — only /api/check and /check reach the postcode logic
   if (path !== '/api/check' && path !== '/check') {
     return respond(404, { error: 'NOT_FOUND', message: 'Route not found' }, 'no-store');
   }
 
-  // 4. POSTCODE EXTRACTION + NORMALISATION + VALIDATION
   const rawPc = (event.queryStringParameters?.pc ?? '').toString();
   const pc = normalise(rawPc);
 
@@ -205,11 +159,10 @@ export const handler = async (event) => {
   const pcHash = hashPostcode(pc);
   const t0 = Date.now();
 
-  // 5. CACHE-ASIDE READ
   try {
     const { Item } = await docClient.send(new GetCommand({
       TableName: TABLE,
-      Key: { postcode: pc }, // normalised postcode
+      Key: { postcode: pc },
     }));
 
     if (Item && Item.ttl > Math.floor(Date.now() / 1000)) {
@@ -218,7 +171,6 @@ export const handler = async (event) => {
       return respond(200, { ...Item.data, source: 'cache', responseTime });
     }
 
-    // 6. CACHE MISS → SSM → OFCOM → WRITE-BACK (fire-and-forget per plan)
     const apiKey = await getApiKey();
     const raw = await fetchFromOfcom(pc, apiKey);
     const data = mapOfcom(pc, raw);

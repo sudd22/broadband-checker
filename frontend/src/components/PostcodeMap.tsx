@@ -28,15 +28,15 @@ interface PostcodeMapProps {
   className?: string;
 }
 
-/** Flies the map to the active target whenever it changes. */
+
 function FlyToTarget({ target }: { target: MapTarget | null }) {
   const { map, isLoaded } = useMap();
 
   useEffect(() => {
     if (!map || !isLoaded || !target) return;
-    // Shift the camera up so the marker lands in the upper half of the hero,
-    // clear of the overlaid search card at the bottom. Negative y moves the
-    // marker upward on screen (camera center is offset below the marker).
+    
+    
+    
     const offsetY = -Math.min(map.getContainer().clientHeight * 0.28, 160);
     map.flyTo({
       center: [target.longitude, target.latitude],
@@ -50,7 +50,7 @@ function FlyToTarget({ target }: { target: MapTarget | null }) {
   return null;
 }
 
-/** A flare-coloured pin with a soft pulsing halo, styled to match the app. */
+
 function BrandedMarker() {
   return (
     <div className="relative grid h-5 w-5 place-items-center">

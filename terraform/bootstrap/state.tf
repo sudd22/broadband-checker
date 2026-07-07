@@ -22,7 +22,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate" {
   }
 }
 
-# Hardens the bucket against accidental public exposure.
+
 resource "aws_s3_bucket_public_access_block" "tfstate" {
   bucket                  = aws_s3_bucket.tfstate.id
   block_public_acls       = true
@@ -31,9 +31,9 @@ resource "aws_s3_bucket_public_access_block" "tfstate" {
   restrict_public_buckets = true
 }
 
-# ── DynamoDB lock table ─────────────────────────────────────────────────────
-# One row per lock, written by Terraform during plan/apply.
-# prevent_destroy = true so destroy never removes it.
+
+
+
 resource "aws_dynamodb_table" "tflock" {
   name         = "bbc-tf-lock"
   billing_mode = "PAY_PER_REQUEST"

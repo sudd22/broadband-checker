@@ -22,7 +22,7 @@ export function LoadingCard() {
         <SpinnerIcon className="h-5 w-5 animate-spin text-flare" />
         <p className="font-medium">Fetching broadband availability…</p>
       </div>
-      {/* Shimmering skeleton rows that echo the result grid. */}
+      {}
       <div className="grid grid-cols-2 divide-x divide-y divide-line lg:grid-cols-4 lg:divide-y-0">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="space-y-3 p-6">

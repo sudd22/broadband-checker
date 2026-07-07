@@ -4,7 +4,7 @@ resource "aws_cloudwatch_dashboard" "main" {
   dashboard_body = jsonencode({
     widgets = [
 
-      # ── Row 1: CloudFront + WAF (us-east-1) ────────────────────────────
+      
       {
         type = "metric"
         x    = 0, y = 0, width = 8, height = 6
@@ -34,7 +34,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
 
-      # ── Row 2: Lambda (eu-west-2) ────────────────────────────────────────
+      
       {
         type = "metric"
         x    = 0, y = 6, width = 8, height = 6
@@ -80,7 +80,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
 
-      # ── Row 3: DynamoDB + API Gateway (eu-west-2) ───────────────────────
+      
       {
         type = "metric"
         x    = 0, y = 12, width = 8, height = 6
@@ -126,7 +126,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
 
-      # ── Row 4: cache hit ratio (from Lambda logs) ───────────────────────
+      
       {
         type = "log"
         x    = 0, y = 18, width = 16, height = 6

@@ -1,33 +1,33 @@
 import animate from 'tailwindcss-animate';
 
-/** @type {import('tailwindcss').Config} */
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // Warm "paper" surfaces — deliberately not pure white/grey.
+        
         paper: {
           DEFAULT: '#f3f1ea',
           card: '#fbfaf5',
           sunk: '#eceae1',
         },
-        // Near-black ink with a faint warmth, plus muted text steps.
+        
         ink: {
           DEFAULT: '#16151b',
           soft: '#3c3b46',
           mute: '#75737f',
         },
-        // Single confident accent used sparingly.
+        
         flare: {
           DEFAULT: '#e0218a',
           deep: '#b30a6a',
           soft: '#fbe4f1',
         },
         line: 'rgba(22, 21, 27, 0.10)',
-        // shadcn-compatible semantic tokens mapped onto the paper/ink/flare palette.
-        // These let drop-in shadcn / mapcn components inherit our visual language
-        // without us re-skinning every primitive.
+        
+        
+        
         border: 'hsl(var(--border))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',

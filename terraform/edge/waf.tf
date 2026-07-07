@@ -1,4 +1,4 @@
-# ── Web ACL (must live in us-east-1 for CloudFront) ────────────────────────
+
 resource "aws_wafv2_web_acl" "main" {
   provider    = aws.us_east_1
   name        = "bbc-waf"
@@ -9,7 +9,7 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
-  # ── Managed rule: common threats (XSS, SQLi, etc.) — all paths ───────────
+  
   rule {
     name     = "CommonRuleSet"
     priority = 10
@@ -29,7 +29,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # ── Managed rule: known bad inputs — API paths only ──────────────────────
+  
   rule {
     name     = "KnownBadInputsAPI"
     priority = 20
@@ -62,7 +62,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # ── Rate limit: 2 000 req / 5 min per IP — non-API paths ─────────────────
+  
   rule {
     name     = "RateLimitStatic"
     priority = 30
@@ -100,7 +100,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # ── Rate limit: 100 req / 5 min per IP — API paths only ──────────────────
+  
   rule {
     name     = "RateLimitAPI"
     priority = 40
