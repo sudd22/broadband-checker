@@ -1,10 +1,12 @@
 variable "domain_name" {
   type        = string
+  default     = "seudd.online"
   description = "Custom domain (e.g. seudd.online) — must be registered and delegated to Route 53"
 }
 
 variable "alert_email" {
   type        = string
+  default     = "seudyas1@gmail.com"
   description = "Email address for SNS alarm + budget notifications"
 }
 

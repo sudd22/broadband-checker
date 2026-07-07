@@ -35,6 +35,7 @@ jobs:
                   terraform -chdir=terraform plan \
                   -var="ofcom_api_key=placeholder" \
                   -lock=false \
+                  -input=false \
                   -out=tfplan \
                   -no-color 2>&1 | tee plan.txt
 
