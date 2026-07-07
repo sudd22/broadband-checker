@@ -9,7 +9,7 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
-  
+
   rule {
     name     = "CommonRuleSet"
     priority = 10
@@ -29,7 +29,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  
+
   rule {
     name     = "KnownBadInputsAPI"
     priority = 20
@@ -62,7 +62,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  
+
   rule {
     name     = "RateLimitStatic"
     priority = 30
@@ -100,7 +100,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  
+
   rule {
     name     = "RateLimitAPI"
     priority = 40

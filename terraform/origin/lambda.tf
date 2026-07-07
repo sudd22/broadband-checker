@@ -21,9 +21,9 @@ resource "aws_lambda_function" "broadband_checker" {
   timeout          = 10
 
 
-  
-  
-  
+
+
+
   reserved_concurrent_executions = -1
 
   environment {
