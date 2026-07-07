@@ -58,6 +58,16 @@ resource "aws_iam_role" "github_deploy" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "github_plan_readonly" {
+  role       = aws_iam_role.github_plan.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "github_deploy_admin" {
+  role       = aws_iam_role.github_deploy.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
 
 output "plan_role_arn" { value = aws_iam_role.github_plan.arn }
 output "deploy_role_arn" { value = aws_iam_role.github_deploy.arn }

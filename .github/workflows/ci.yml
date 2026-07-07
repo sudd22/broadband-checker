@@ -1,77 +1,77 @@
 name: CI
 on:
-    push:
-        branches: [main]
-    pull_request:
+  push:
+    branches: [main]
+  pull_request:
 
 permissions:
-    contents: read
-    id-token: write
-    security-events: write
+  contents: read
+  id-token: write
+  security-events: write
 
 jobs:
-    ci:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-            - uses: actions/setupnode@v4
-              with:
-                  node-version: "20"
-                  cache: "npm"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
 
-            - name: frontend install
-              run: cd frontend && npm ci
+      - name: Frontend install
+        run: cd frontend && npm ci
 
-            - name: Frontend lint
-              run: cd frontend && npm run lint
+      - name: Frontend lint
+        run: cd frontend && npm run lint
 
-            - name: Frontend type-check
-              run: cd frontend && npm run type-check
+      - name: Frontend type-check
+        run: cd frontend && npm run type-check
 
-            - name: Frontend test
-              run: cd frontend && npm run test -- --run
+      - name: Frontend test
+        run: cd frontend && npm test -- --run
 
-            - name: Frontend build (demo mode)
-              run: cd frontend && VITE_API_URL=/demo npm run build
+      - name: Frontend build (demo mode)
+        run: cd frontend && VITE_API_URL=/demo npm run build
 
-            - name: lambda instal
-              run: cd lambda && npm ci
+      - name: Lambda install
+        run: cd lambda && npm ci
 
-            - name: lambda lint
-              run: cd lambda && npm run lint
+      - name: Lambda lint
+        run: cd lambda && npm run lint
 
-            - name: lambda test
-              run: cd lambda && npm run test
+      - name: Lambda test
+        run: cd lambda && npm test
 
-            - name: snyk frontend scan
-              uses: snyk/actions/node@master
-              env:
-                  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-              with:
-                  args: --sevierity-threshold=high --filename=frontend/package-lock.json
+      - name: Snyk frontend scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=frontend/package.json
 
-            - name: snyk lambda scan
-              uses: snyk/actions/node@master
-              env:
-                  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-              with:
-                  args: --severity-threshold=high --filename=lambda/package-lock.json
+      - name: Snyk lambda scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=lambda/package.json
 
-            - name: checkov IaC
-              uses: bridgecrewio/checkov-actions@master
-              with:
-                  directory: terraform/
-                  framework: terraform
-                  soft_fail: false
-                  skip_check: >-
-                      CKV_AWS_144,
-                      CKV_AWS_62,
-                      CKV_AWS_116
+      - name: Checkov IaC scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          soft_fail: false
+          skip_check: >-
+            CKV_AWS_144,
+            CKV2_AWS_62,
+            CKV_AWS_116
 
-            - uses: hashicorp/setup-terraform@v3
-              with:
-                  terraform_version: "~1.7"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.7"
 
-            - name: Terraform fmt check
-              run: terraform chdir=terraform fmt -check -recursive
+      - name: Terraform fmt check
+        run: terraform -chdir=terraform fmt -check -recursive
