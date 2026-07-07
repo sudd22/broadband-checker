@@ -40,6 +40,8 @@ jobs:
               run: |
                   terraform -chdir=terraform destroy \
                     -var="ofcom_api_key=placeholder" \
+                    -var="domain_name=${{ secrets.CLOUDFRONT_DOMAIN }}" \
+                    -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
                     -auto-approve
 
             - name: Post destroy summary
