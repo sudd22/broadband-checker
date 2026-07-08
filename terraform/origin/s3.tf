@@ -6,7 +6,8 @@ locals {
 
 
 resource "aws_s3_bucket" "static" {
-  bucket = "bbc-static-prod-${local.account_id}"
+  bucket        = "bbc-static-prod-${local.account_id}"
+  force_destroy = true
 }
 
 
@@ -78,8 +79,8 @@ resource "aws_s3_bucket_policy" "static" {
 }
 
 resource "aws_s3_bucket" "logs" {
-
-  bucket = "bbc-logs-prod-${local.account_id}"
+  bucket        = "bbc-logs-prod-${local.account_id}"
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
