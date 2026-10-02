@@ -46,6 +46,6 @@ jobs:
 
             - name: Post destroy summary
               run: |
-                  echo "## 🗑️ Infrastructure destroyed" >> $GITHUB_STEP_SUMMARY
+                  echo "Infrastructure destroyed successfully" >> $GITHUB_STEP_SUMMARY
                   echo "State bucket and DynamoDB lock table **retained**." >> $GITHUB_STEP_SUMMARY
                   echo "Re-deploy at any time with \`terraform apply\`." >> $GITHUB_STEP_SUMMARY
