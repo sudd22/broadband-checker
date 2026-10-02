@@ -48,7 +48,7 @@ The project runs a small web app safely in the cloud:
 2. The app calls `/api/check?pc=…` behind CloudFront.
 3. **Edge cache (up to 5 minutes)** — a successful response can be reused for the same `pc` query value, without invoking Lambda. Different casing or spacing can create different edge-cache entries.
 4. **Database cache (24 hours)** — on an edge miss, Lambda normalises the postcode and returns an unexpired DynamoDB entry.
-5. **Live fetch** — on a database miss or expired entry, Lambda calls Ofcom, starts a DynamoDB write for the next lookup, and returns the result. Failed cache writes are logged.
+5. **Live fetch** — on a database miss or expired entry, Lambda calls Ofcom, starts a DynamoDB write for the next lookup, and returns the result. Failed cache writes are logged. Input is normalised first, so `sw1a 1aa`, `Sw1a1Aa` and `SW1A 1AA` all resolve to the same entry.
 
 The API response includes `source: "cache"` for a DynamoDB hit or `source: "live"` for an Ofcom fetch. CloudFront can replay that response, so `source` does not identify an edge-cache hit.
 
@@ -76,7 +76,7 @@ The API response includes `source: "cache"` for a DynamoDB hit or `source: "live
 * `index.html` is uploaded with `no-cache, no-store`; the explicit `index.html` cache behaviour disables caching. The default `/` behaviour still uses `Managed-CachingOptimized`, so immediate freshness at the root URL is not guaranteed.
 * Frontend and backend deploy separately through GitHub Actions
 
-### Observability & cost
+### Alerts & cost
 
 * One CloudWatch dashboard defines service metrics, alarms and Lambda cache/live log counts
 * Email alerts cover errors, slow requests and throttling
@@ -195,7 +195,7 @@ git clone https://github.com/sudd22/broadband-checker.git
 cd broadband-checker/frontend
 npm ci
 cp .env.example .env
-npm run dev          # http://localhost:5173 (unless that port is occupied)
+npm run dev        
 ```
 
 On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp .env.example .env`. Copy the example on first setup; if `.env` already exists, set `VITE_API_URL=/demo` in that file. Use `npm.cmd` if PowerShell blocks the `npm.ps1` launcher.
@@ -209,7 +209,6 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp .env.exa
 |`BT71 7BA`|Simulated upstream failure|The error banner|
 |Any other valid postcode|Generic fallback|67 / 18 Mbps FTTC|
 
-Input is normalised first, so `sw1a 1aa`, `Sw1a1Aa` and `SW1A 1AA` all resolve to the same entry. `VITE_API_URL` selects the coverage source: `/demo` for fixtures, `/api` for the deployed same-origin backend. It has no code-level default, so creating `.env` is required. Restart Vite after changing it. Setting `/api` locally does not create or proxy a backend; the Vite configuration defines no API proxy. Leave `VITE_ORIGIN_VERIFY_SECRET` empty: `VITE_` values are bundled into browser code, and the deployed origin verification secret belongs in CloudFront and Lambda only.
 
 From the frontend directory, stop the dev server with Ctrl+C and run the frontend checks:
 
@@ -223,7 +222,7 @@ Backend tests mock AWS services and Ofcom fetches, so the tests need no AWS cred
 ```bash
 cd ../lambda
 npm ci
-npm test             # 100% coverage gate on the handler
+npm test           
 ```
 
 ---
@@ -295,7 +294,7 @@ Lambda change          →  update the API and run a health check
 
 ## Cost
 
-At low traffic, WAF is the main fixed application cost. With one web ACL and four configured rule entries, its base charge is approximately **$9/month**, plus request charges and any additional features. See [AWS WAF pricing](https://aws.amazon.com/waf/pricing/).
+At low traffic, WAF is the main fixed application cost. With one web ACL and four configured rule entries, its base charge is approximately **$9/month**, plus request charges and any additional features.
 
 API Gateway, CloudFront, S3, DynamoDB, Lambda, CloudWatch, tracing, SSM and SNS add usage-dependent costs. Route 53 hosted-zone charges and domain renewal are separate; free-tier eligibility and domain pricing vary. A low-traffic total near $10/month is an estimate, not a guaranteed bill.
 
@@ -354,6 +353,5 @@ GitHub: [@sudd22](https://github.com/sudd22) · Repository: [sudd22/broadband-ch
 Broadband data comes from Ofcom’s public coverage API.
 
 <p align="center">
-  <sub>Terraform, OIDC, edge security, caching and automated deployments.</sub>
 </p>
 
