@@ -228,35 +228,6 @@ npm test             # 100% coverage gate on the handler
 
 \---
 
-## Deploy model
-
-### First time — set up AWS once
-
-The Terraform state and GitHub connection are created locally once:
-
-```bash
-# 1) Create Terraform state and GitHub permissions
-cd terraform/bootstrap
-terraform init \\\&\\\& terraform apply
-
-# 2) Create the application
-cd ..
-terraform init
-terraform apply -var="ofcom\\\_api\\\_key=<OFCOM\\\_KEY>"
-```
-
-After that, add the required repository secrets and create the `production` and `production-destroy` GitHub Environments. Delegate the domain to Route 53 so the HTTPS certificate and domain work.
-
-### After setup, use Actions for deployments
-
-```text
-PR changing Terraform  →  plan for review  →  merge  →  manual Apply
-Frontend change        →  build and upload the website
-Lambda change          →  update the API and run a health check
-```
-
-\---
-
 ## Cost
 
 Roughly **$10 a month** while the stack is up, plus about $12 a year for the domain.
