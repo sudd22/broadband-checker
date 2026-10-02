@@ -31,16 +31,14 @@ The project runs a small web app safely in the cloud:
 > Based on [Ofcom’s public coverage checker](https://checker.ofcom.org.uk/en-gb/broadband-coverage).
 
 <p align="center">
-  <video src="docs/assets/webapp.webm" controls muted playsinline width="720">
-    <a href="docs/assets/webapp.webm">Watch the broadband lookup recording</a>
-  </video>
+  <a href="docs/assets/webapp-hq.gif">
+    <img src="docs/assets/webapp-hq.gif" alt="Broadband lookup: postcode entry, map location and speed results" width="1000" />
+  </a>
   <br/>
-  <em>Recorded lookup on <a href="https://seudd.online">seudd.online</a></em>
+  <em>High-resolution lookup preview — click to view at full size.</em>
 </p>
 
-[Watch the broadband lookup recording (WebM)](docs/assets/webapp.webm)
-
-Use the recording links if your Markdown viewer does not display embedded video controls.
+[Download the full lookup recording (MP4)](docs/assets/webapp.mp4?raw=true) · [Original WebM](docs/assets/webapp.webm?raw=true)
 
 ---
 
@@ -175,14 +173,14 @@ The cache chart counts `source=cache` and `source=live` in Lambda logs, so it co
 Before relying on the alerts, correct the existing metric configuration: CloudFront metrics need the `Region=Global` dimension (see [AWS metric requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/programming-cloudwatch-metrics.html)); the 4xx alarm uses `Aws/CloudFront` instead of `AWS/CloudFront` and divides an error-rate percentage by request count; the DynamoDB read-throttle alarm targets `broadband-checker` instead of the actual `broadband-cache` table. Handled lookup failures return HTTP 502 and do not necessarily increment Lambda’s `Errors` metric.
 
 <p align="center">
-  <video src="docs/assets/cloudwatch-dashboard.webm" controls muted playsinline width="900">
-    <a href="docs/assets/cloudwatch-dashboard.webm">Watch the dashboard walkthrough</a>
-  </video>
+  <a href="docs/assets/cloudwatch-dashboard.gif">
+    <img src="docs/assets/cloudwatch-dashboard.gif" alt="CloudWatch dashboard walkthrough showing service metrics, Lambda duration and cache behaviour" width="1200" />
+  </a>
   <br/>
-  <em>Recorded CloudWatch dashboard walkthrough</em>
+  <em>High-resolution dashboard walkthrough — click to view at full size.</em>
 </p>
 
-[Watch the CloudWatch dashboard walkthrough (WebM)](docs/assets/cloudwatch-dashboard.webm)
+[Download the full dashboard recording (MP4)](docs/assets/cloudwatch-dashboard.mp4?raw=true) · [Original WebM](docs/assets/cloudwatch-dashboard.webm?raw=true)
 
 ---
 
