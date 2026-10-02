@@ -28,7 +28,7 @@ jobs:
               with:
                   terraform_version: "~1.7"
 
-            - name: onfigure AWS credentials (deploy OIDC)
+            - name: configure AWS credentials (deploy OIDC)
               uses: aws-actions/configure-aws-credentials@v4
               with:
                   role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
