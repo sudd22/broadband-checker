@@ -170,7 +170,7 @@ Terraform defines CloudWatch dashboard **`broadband-checker`**, combining London
 
 The cache chart counts `source=cache` and `source=live` in Lambda logs, so it covers DynamoDB hits and Ofcom fetches, not CloudFront cache hits.
 
-Before relying on the alerts, correct the existing metric configuration: CloudFront metrics need the `Region=Global` dimension (see [AWS metric requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/programming-cloudwatch-metrics.html)); the 4xx alarm uses `Aws/CloudFront` instead of `AWS/CloudFront` and divides an error-rate percentage by request count; the DynamoDB read-throttle alarm targets `broadband-checker` instead of the actual `broadband-cache` table. Handled lookup failures return HTTP 502 and do not necessarily increment Lambda’s `Errors` metric.
+Before relying on the alerts, correct the existing metric configuration: CloudFront metrics need the `Region=Global` dimension, the 4xx alarm uses `Aws/CloudFront` instead of `AWS/CloudFront` and divides an error-rate percentage by request count; the DynamoDB read-throttle alarm targets `broadband-checker` instead of the actual `broadband-cache` table. Handled lookup failures return HTTP 502 and do not necessarily increment Lambda’s `Errors` metric.
 
 <p align="center">
   <a href="docs/assets/cloudwatch-dashboard.gif">
@@ -241,53 +241,6 @@ npm test
 │   ├── edge/                   # us-east-1 CDN, WAF, DNS, TLS
 │   └── observability/          # Alarms, dashboard, SNS, budget
 └── docs/assets/                # Recordings and screenshots
-```
-
----
-
-## Deploy model
-
-### First time — set up AWS once
-
-AWS deployment requires Terraform 1.7+, authenticated AWS credentials, an Ofcom API key, and an existing public Route 53 hosted zone for your registered domain. Delegate the domain to that zone before certificate validation. The stack looks up the zone; it does not create or destroy it.
-
-The bootstrap configuration hard-codes a state bucket name containing the original account ID. Before deploying to another account, choose a globally unique bucket name in `terraform/bootstrap/state.tf` and update the matching backend in `terraform/main.tf`.
-
-Create Terraform state and the GitHub connection locally once (these commands create billable resources):
-
-```bash
-# 1) Create Terraform state and GitHub permissions
-cd terraform/bootstrap
-terraform init
-terraform apply
-
-# 2) Create the application
-cd ..
-terraform init
-# Set TF_VAR_ofcom_api_key securely in your shell before running this.
-terraform apply -var="domain_name=<YOUR_DOMAIN>" -var="alert_email=<YOUR_EMAIL>"
-```
-
-Add the repository secrets used by the workflows:
-
-|Secret|Value|
-|-|-|
-|`AWS_PLAN_ROLE_ARN`|Bootstrap `plan_role_arn` output|
-|`AWS_DEPLOY_ROLE_ARN`|Bootstrap `deploy_role_arn` output|
-|`CLOUDFRONT_DOMAIN`|Custom domain, without `https://`|
-|`ALERT_EMAIL`|Address for SNS and budget notifications|
-|`OFCOM_API_KEY`|Ofcom subscription key|
-|`S3_BUCKET`|Application static bucket name|
-|`SNYK_TOKEN`|Token for CI dependency scans|
-
-Create the `production` and `production-destroy` GitHub Environments, configure required reviewers as appropriate, and confirm both SNS email subscriptions. Bootstrap currently grants the deploy role `AdministratorAccess`; this is broad permission, not a least-privilege policy. Keep the local bootstrap state safe: it tracks the retained resources. The Terraform plan role uses `ReadOnlyAccess`, so the plan workflow disables state locking.
-
-### After setup, use Actions for deployments
-
-```text
-PR changing Terraform  →  plan for review  →  merge  →  manual Apply
-Frontend change        →  build and upload the website
-Lambda change          →  update the API and run a health check
 ```
 
 ---
